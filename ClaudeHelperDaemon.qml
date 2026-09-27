@@ -40,6 +40,9 @@ PluginComponent {
     readonly property int captureDelay: pluginData.captureDelay ?? 350
     readonly property bool autoOpen: pluginData.autoOpen ?? true
     readonly property string extraInstructions: pluginData.extraInstructions || ""
+    // Markdown -> HTML for replies with math (tools/render-math.py). Nix sets
+    // an absolute path; without one the math falls back to blurry Markdown.
+    readonly property string cmarkCommand: pluginData.cmarkCommand || "cmark-gfm"
 
     readonly property string workDir: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/dms-claude-helper"
 
@@ -130,9 +133,13 @@ PluginComponent {
     // Shown raw at once, swapped for the rendered version (msg.rendered) when
     // tools/render-math.py finishes, typically well under a second.
 
-    function _setRendered(time, markdown) {
+    // `output` is render-math.py's: a format line ("html" | "md"), then the text.
+    function _setRendered(time, output) {
+        const nl = output.indexOf("\n");
+        const format = output.slice(0, nl);
         messages = messages.map(m => m.time === time ? Object.assign({}, m, {
-            rendered: markdown
+            rendered: output.slice(nl + 1),
+            renderedFormat: format
         }) : m);
         if (pluginService)
             pluginService.savePluginState(pluginId, "messages", messages);
@@ -142,7 +149,7 @@ PluginComponent {
         const proc = mathProcComponent.createObject(root, {
             msgTime: msg.time
         });
-        proc.command = ["python3", _pluginFile("tools/render-math.py"), "--out", workDir + "/math", "--color", Theme.surfaceText.toString(), "--px", String(Theme.fontSizeMedium), "--max-width", "420", msg.text];
+        proc.command = ["python3", _pluginFile("tools/render-math.py"), "--out", workDir + "/math", "--color", Theme.surfaceText.toString(), "--px", String(Theme.fontSizeMedium), "--max-width", "420", "--cmark", cmarkCommand, msg.text];
         proc.running = true;
     }
 

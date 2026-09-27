@@ -102,7 +102,7 @@ Item {
                             readOnly: true
                             selectByMouse: true
                             wrapMode: TextEdit.Wrap
-                            textFormat: bubble.mine ? TextEdit.PlainText : TextEdit.MarkdownText
+                            textFormat: bubble.mine ? TextEdit.PlainText : bubble.modelData.renderedFormat === "html" ? TextEdit.RichText : TextEdit.MarkdownText
                             text: bubble.modelData.rendered || bubble.modelData.text || ""
                             color: bubble.isError ? Theme.error : Theme.surfaceText
                             selectionColor: Theme.withAlpha(Theme.primary, 0.35)

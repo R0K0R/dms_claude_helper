@@ -62,8 +62,9 @@ How to send an answer:
   `\mathrm{H_2O}`. For units write `9.8\,\mathrm{m/s^2}`.
 - Each formula becomes an image about 420 px wide at most. Anything wider is
   shrunk, so split long derivations with `\begin{aligned}…\end{aligned}` and
-  don't put an entire solution on one line. Inline math sits slightly high,
-  so put fractions and other tall expressions in display math.
+  don't put an entire solution on one line. Inline math is aligned on the
+  math axis and set in text style, so an inline `\frac` comes out small.
+  Put fractions you want to be readable in display math.
 - Custom macros (`\newcommand`, `\def`) and file commands are rejected, and
   that formula is shown as raw source. A formula that fails to compile is also
   shown as raw source.

@@ -13,7 +13,7 @@
     },
     "settings": "./ClaudeHelperSettings.qml",
     "requires_dms": ">=1.5.0",
-    "requires": ["claude", "grim", "python3", "latex", "dvisvgm", "magick"],
+    "requires": ["claude", "grim", "python3", "latex", "dvisvgm", "magick", "cmark-gfm"],
     "permissions": [
         "settings_read",
         "settings_write",

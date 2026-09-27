@@ -62,11 +62,18 @@ dms ipc call claudeHelper status 'a few words'
 - `prompt/system.md` is appended to Claude Code's system prompt. It covers
   the IPC usage, the display constraints and the tutoring policy.
 - `tools/render-math.py` turns `$…$`, `$$…$$`, `\(…\)` and `\[…\]` into PNGs
-  (`latex` → `dvisvgm --exact-bbox` → `magick`, at 1× and `@2x`), in the
-  theme's text colour, cached by content hash. Qt's MarkdownText shows them
-  as images. The alt text must not be empty, or Qt silently drops the image.
-  Formulas that fail to compile, or that use file or macro commands, stay as
-  source text.
+  (`latex` → `dvisvgm --exact-bbox` → `magick`), in the theme's text colour,
+  cached by content hash.
+  - Each PNG is rendered at 3× and placed as `<img width height>` at text
+    size, so it stays sharp on scaled outputs. Qt's Markdown can't size
+    images and would upscale them, so the reply goes through `cmark-gfm` to
+    HTML and is shown as RichText.
+  - Inline images are padded so their centre sits on TeX's math axis, then
+    aligned to the middle of the text line.
+  - Formulas that fail to compile, or that use file or macro commands, stay
+    as source text.
+  - Without `cmark-gfm` it falls back to Markdown images, which are blurry on
+    a scaled output.
 - `ConversationView.qml` is the conversation plus the ask row, shared by the
   bar popout (`ClaudeHelperWidget.qml`) and the reply window
   (`ReplyWindow.qml`).
@@ -74,8 +81,9 @@ dms ipc call claudeHelper status 'a few words'
 ## Requirements
 
 `claude` (logged in), `grim`, `python3`, `latex` with amsmath, mathtools and
-bm, `dvisvgm`, and ImageMagick with the rsvg delegate. All of them must be
-on the DMS service's PATH.
+bm, `dvisvgm`, ImageMagick with the rsvg delegate, and `cmark-gfm`. All of
+them must be on the DMS service's PATH. `cmark-gfm` can instead be given as
+an absolute path in the `cmarkCommand` setting.
 
 ## Installation
 
@@ -95,7 +103,10 @@ and point DMS at it:
 programs.dank-material-shell.plugins.claudeHelper = {
   enable = true;
   src = inputs.claude-helper;
-  settings.model = "sonnet";   # optional; see the settings page for the rest
+  settings = {
+    cmarkCommand = "${pkgs.cmark-gfm}/bin/cmark-gfm";
+    model = "sonnet";   # optional; see the settings page for the rest
+  };
 };
 ```
 
