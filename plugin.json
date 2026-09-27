@@ -1,0 +1,22 @@
+{
+    "id": "claudeHelper",
+    "name": "Claude Helper",
+    "description": "Screenshot the screen from the bar and hand it to a background Claude Code session, which answers over `dms ipc call claudeHelper ...`. Tutors math/science problems with hints and error-spotting instead of answers; renders LaTeX.",
+    "version": "1.0.0",
+    "author": "r0k0r",
+    "type": "composite",
+    "icon": "neurology",
+    "capabilities": ["daemon", "dankbar-widget", "ipc"],
+    "components": {
+        "daemon": "./ClaudeHelperDaemon.qml",
+        "widget": "./ClaudeHelperWidget.qml"
+    },
+    "settings": "./ClaudeHelperSettings.qml",
+    "requires_dms": ">=1.5.0",
+    "requires": ["claude", "grim", "python3", "latex", "dvisvgm", "magick"],
+    "permissions": [
+        "settings_read",
+        "settings_write",
+        "process"
+    ]
+}
