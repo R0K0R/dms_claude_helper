@@ -9,10 +9,11 @@ import qs.Modules.Plugins
   The bar surface: one instance per bar per screen, holding no state of its
   own -- everything is read from the daemon (ClaudeHelperDaemon.qml).
 
-  Left click opens the popout (conversation, an optional note, capture).
-  Right click captures and asks straight away with no note. The pill spins
-  while Claude works and shows a dot for an unread reply. Replies open in
-  the daemon's own window (ReplyWindow.qml), not here.
+  Left click opens the popout (sessions, conversation, an optional note,
+  capture). Right click captures and asks straight away with no note. The
+  pill spins while Claude works and shows a dot for an unread reply. A
+  reply opens this same popout: the daemon picks the widget that asked, or
+  the one on the focused output, among those on a bar that is shown.
 */
 PluginComponent {
     id: root
@@ -38,14 +39,38 @@ PluginComponent {
             daemon.capture(note || "", screenName, root);
     }
 
+    // Both bars (landscape and portrait) carry an instance; only one is shown.
+    function isShown() {
+        return visible && !!Window.window && Window.window.visible;
+    }
+
+    function openPopout() {
+        if (!popoutOpen)
+            triggerPopout();
+    }
+
+    // The daemon spawns a tick after the bar, so register when it appears.
+    onDaemonChanged: {
+        if (daemon)
+            daemon.registerWidget(root);
+    }
+    Component.onCompleted: {
+        if (daemon)
+            daemon.registerWidget(root);
+    }
+    Component.onDestruction: {
+        if (daemon)
+            daemon.unregisterWidget(root);
+    }
+
     Connections {
         target: root.daemon
         function onHidePopoutsRequested() {
             if (root.popoutOpen)
                 root.closePopout();
         }
-        function onReplyArrived() {
-            if (root.popoutOpen)
+        function onReplyArrived(key) {
+            if (root.popoutOpen && key === root.daemon.currentKey)
                 root.daemon.markRead();
         }
     }
@@ -105,7 +130,7 @@ PluginComponent {
                     return "Daemon not running — enable the plugin.";
                 if (d.capturing)
                     return "Capturing screen…";
-                if (d.busy)
+                if (d.currentBusy)
                     return d.statusText || "thinking…";
                 return "Right-click the bar icon to capture & ask instantly.";
             }
@@ -113,17 +138,9 @@ PluginComponent {
 
             onParentPopoutChanged: root._popout = parentPopout
 
-            headerActions: Component {
-                DankActionButton {
-                    iconName: "restart_alt"
-                    tooltipText: "New session (forget the conversation)"
-                    onClicked: root.daemon && root.daemon.reset()
-                }
-            }
-
             ConversationView {
                 width: parent.width
-                logHeight: 380
+                logHeight: 420
                 daemon: root.daemon
                 widget: root
             }

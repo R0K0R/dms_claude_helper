@@ -17,7 +17,7 @@ PluginSettings {
 
     StyledText {
         width: parent.width
-        text: "Click the bar icon for the conversation, right-click to capture & ask at once. A background Claude Code session reads the screenshot and answers over `dms ipc call claudeHelper …`; for math and science it points out mistakes and gives hints rather than answers. Model and instruction changes apply to the next session (↻ in the popout)."
+        text: "Click the bar icon for the conversation, right-click to capture & ask at once. A background Claude Code session reads the screenshot and answers over `dms ipc call claudeHelper …`; for math and science it points out mistakes and gives hints rather than answers. Model and instruction changes apply when a session's Claude process next starts (switching away and back, or a new session)."
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.surfaceVariantText
         wrapMode: Text.WordWrap
@@ -57,8 +57,8 @@ PluginSettings {
 
     ToggleSetting {
         settingKey: "autoOpen"
-        label: "Open window on reply"
-        description: "Show each answer in full in its own window as soon as it arrives. Off: just a dot on the bar icon."
+        label: "Open popout on reply"
+        description: "Open the bar popout on the answer as soon as it arrives. Off: just a dot on the bar icon."
         defaultValue: true
     }
 

@@ -4,27 +4,214 @@ import qs.Common
 import qs.Widgets
 
 /*
-  The conversation plus the ask row, shared by the bar popout and the reply
-  window. It holds nothing itself; `daemon` is ClaudeHelperDaemon.
-
-  Height: the popout gives it a fixed logHeight and lets it size itself; the
-  window anchors it to fill and the log takes whatever the ask row leaves.
+  The bar popout's body: a session header, then either the current
+  session's conversation or the session list, then the ask row. It holds
+  nothing itself; `daemon` is ClaudeHelperDaemon.
 */
 Item {
     id: view
 
     property var daemon: null
     property var widget: null // passed to the daemon as "who asked"
-    property real logHeight: height - askRow.height - Theme.spacingS
+    property real logHeight: 380
+    property bool listing: false // the session list replaces the log
 
-    implicitHeight: logHeight + Theme.spacingS + askRow.height
+    implicitHeight: sessionBar.height + Theme.spacingS + logHeight + Theme.spacingS + askRow.height
 
     function focusNote() {
         note.forceActiveFocus();
     }
 
+    function ago(t) {
+        const m = Math.round((Date.now() - t) / 60000);
+        if (m < 1)
+            return "just now";
+        if (m < 60)
+            return m + " min ago";
+        if (m < 60 * 24)
+            return Math.round(m / 60) + " h ago";
+        return Qt.formatDate(new Date(t), "MMM d");
+    }
+
+    // ---- session header: current title (opens the list) + new session ----
+
+    Rectangle {
+        id: sessionBar
+        width: parent.width
+        height: 36
+        radius: Theme.cornerRadius
+        color: barArea.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+
+        MouseArea {
+            id: barArea
+            anchors.fill: parent
+            anchors.rightMargin: newButton.width + Theme.spacingS
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: view.listing = !view.listing
+        }
+
+        Row {
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.spacingM
+            anchors.right: newButton.left
+            anchors.rightMargin: Theme.spacingS
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.spacingS
+
+            DankIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: view.listing ? "expand_less" : "forum"
+                size: Theme.iconSizeSmall
+                color: Theme.surfaceVariantText
+            }
+
+            StyledText {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - Theme.iconSizeSmall - Theme.spacingS - (otherUnread.visible ? otherUnread.width + Theme.spacingS : 0)
+                elide: Text.ElideRight
+                font.weight: Font.Medium
+                color: Theme.surfaceText
+                text: view.listing ? "Sessions" : (view.daemon && view.daemon.current ? view.daemon.current.title : "No session")
+            }
+
+            // Another session has an unread reply.
+            Rectangle {
+                id: otherUnread
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !view.listing && !!view.daemon && view.daemon.sessions.some(s => s.unread && s.key !== view.daemon.currentKey)
+                width: 7
+                height: 7
+                radius: 3.5
+                color: Theme.error
+            }
+        }
+
+        DankActionButton {
+            id: newButton
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            buttonSize: 32
+            iconName: "add"
+            tooltipText: "New session"
+            onClicked: {
+                if (view.daemon)
+                    view.daemon.newSession();
+                view.listing = false;
+                view.focusNote();
+            }
+        }
+    }
+
+    // ---- session list -----------------------------------------------------
+
+    DankFlickable {
+        id: sessionList
+        visible: view.listing
+        anchors.top: sessionBar.bottom
+        anchors.topMargin: Theme.spacingS
+        width: parent.width
+        height: Math.max(0, view.logHeight)
+        clip: true
+        contentWidth: width
+        contentHeight: sessionColumn.implicitHeight
+
+        Column {
+            id: sessionColumn
+            width: sessionList.width - Theme.spacingS
+            spacing: Theme.spacingXS
+
+            Repeater {
+                model: view.daemon ? view.daemon._byRecent() : []
+
+                delegate: Rectangle {
+                    id: row
+
+                    required property var modelData
+                    readonly property bool isCurrent: !!view.daemon && modelData.key === view.daemon.currentKey
+                    readonly property bool isBusy: !!view.daemon && !!(view.daemon.runtime[modelData.key] && view.daemon.runtime[modelData.key].busy)
+
+                    width: sessionColumn.width
+                    height: 52
+                    radius: Theme.cornerRadius
+                    color: isCurrent ? Theme.withAlpha(Theme.primary, 0.14) : rowArea.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+
+                    MouseArea {
+                        id: rowArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            view.daemon.selectSession(row.modelData.key);
+                            view.listing = false;
+                        }
+                    }
+
+                    DankIcon {
+                        id: rowIcon
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.spacingM
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: row.isBusy ? "progress_activity" : row.modelData.unread ? "mark_chat_unread" : "chat_bubble"
+                        size: Theme.iconSizeSmall
+                        color: row.isBusy || row.modelData.unread ? Theme.primary : Theme.surfaceVariantText
+                    }
+
+                    Column {
+                        anchors.left: rowIcon.right
+                        anchors.leftMargin: Theme.spacingM
+                        anchors.right: deleteButton.left
+                        anchors.rightMargin: Theme.spacingS
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        StyledText {
+                            width: parent.width
+                            elide: Text.ElideRight
+                            font.weight: row.isCurrent ? Font.Bold : Font.Medium
+                            color: Theme.surfaceText
+                            text: row.modelData.title
+                        }
+
+                        StyledText {
+                            width: parent.width
+                            elide: Text.ElideRight
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceVariantText
+                            text: view.ago(row.modelData.updated) + " · " + row.modelData.messages.length + " messages"
+                        }
+                    }
+
+                    DankActionButton {
+                        id: deleteButton
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.spacingXS
+                        anchors.verticalCenter: parent.verticalCenter
+                        buttonSize: 32
+                        iconName: "delete"
+                        tooltipText: "Delete session"
+                        onClicked: view.daemon.deleteSession(row.modelData.key)
+                    }
+                }
+            }
+
+            StyledText {
+                visible: !view.daemon || view.daemon.sessions.length === 0
+                width: parent.width
+                topPadding: Theme.spacingL
+                horizontalAlignment: Text.AlignHCenter
+                color: Theme.surfaceVariantText
+                text: "No sessions yet."
+            }
+        }
+    }
+
+    // ---- conversation -------------------------------------------------
+
     DankFlickable {
         id: log
+        visible: !view.listing
+        anchors.top: sessionBar.bottom
+        anchors.topMargin: Theme.spacingS
         width: parent.width
         height: Math.max(0, view.logHeight)
         clip: true
@@ -137,6 +324,7 @@ Item {
                 if (view.daemon)
                     view.daemon.capture(text, view.widget ? view.widget.screenName : "", view.widget);
                 text = "";
+                view.listing = false;
             }
         }
 
@@ -150,6 +338,7 @@ Item {
             onClicked: {
                 view.daemon.capture(note.text, view.widget ? view.widget.screenName : "", view.widget);
                 note.text = "";
+                view.listing = false;
             }
         }
 
@@ -160,8 +349,10 @@ Item {
             tooltipText: "Send note only (no screenshot)"
             enabled: note.text.trim().length > 0
             onClicked: {
-                if (view.daemon && view.daemon.askText(note.text, view.widget))
+                if (view.daemon && view.daemon.askText(note.text, view.widget)) {
                     note.text = "";
+                    view.listing = false;
+                }
             }
         }
     }

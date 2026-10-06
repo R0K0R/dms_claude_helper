@@ -2,8 +2,8 @@
 
 A DankMaterialShell bar widget that screenshots your screen and hands it to a
 background Claude Code session. Claude answers by calling back into the
-plugin over `dms ipc`, and the answer opens in its own window, with LaTeX
-rendered.
+plugin over `dms ipc`, and the answer opens in the bar popout, with LaTeX
+rendered. You can keep several sessions and switch between them.
 
 For math and science problems it acts as a tutor, not an answer key. It
 points out the first mistake in your work, names what kind of mistake it is,
@@ -17,50 +17,58 @@ give the final answer.
   Enter) to capture and ask. The send button asks a follow-up without a
   screenshot.
 - **Right-click** the icon to capture and ask straight away.
-- **↻** in the popout starts a new session.
+- The bar at the top of the popout shows the current session. Click it for
+  the session list (switch, see which are busy or unread, delete); **+**
+  starts a new one. Claude names each session after its topic on its first
+  reply.
 
 The icon spins while Claude works and shows a dot when a reply is unread.
-When the reply lands, it opens in full in the **Claude Helper** window. This
-is a real toplevel window (class `com.danklinux.dms`, title `Claude
-Helper`), so the compositor can float, move and resize it. A notification
-toast would fold a long answer. The window hides while a screenshot is
-taken, so it isn't in the picture. Esc closes it; `dms ipc call claudeHelper
-show` brings it back.
+When a reply lands, the popout opens on it: on the bar you asked from, or
+the one on the focused screen. The popout closes while a screenshot is
+taken, so it isn't in the picture.
+
+Each session is its own Claude Code conversation. Only the current
+session keeps a Claude process running; the others are stopped once
+they're idle, and pick up with `--resume` on their next ask, across DMS
+restarts too.
 
 ## IPC
 
 ```
 dms ipc call claudeHelper ask  'optional note'   # screenshot focused output + ask (bind this to a key)
 dms ipc call claudeHelper say  'follow-up'       # ask without a screenshot
-dms ipc call claudeHelper reset                  # new session
-dms ipc call claudeHelper show | hide            # the reply window
-dms ipc call claudeHelper last                   # last reply as text
+dms ipc call claudeHelper sessions               # key, * for current, title
+dms ipc call claudeHelper newSession | select <key> | remove <key>
+dms ipc call claudeHelper show | hide            # the popout
+dms ipc call claudeHelper last                   # current session's last reply
 dms ipc call claudeHelper state
-# used by Claude itself:
-dms ipc call claudeHelper replyFile reply.md
-dms ipc call claudeHelper reply  'text'
-dms ipc call claudeHelper status 'a few words'
+# used by Claude itself; <key> routes the call to its session:
+dms ipc call claudeHelper replyFile <key> reply-<key>.md
+dms ipc call claudeHelper reply  <key> 'text'
+dms ipc call claudeHelper status <key> 'a few words'
+dms ipc call claudeHelper title  <key> 'topic'
 ```
 
 ## How it works
 
-- `ClaudeHelperDaemon.qml` runs once and owns everything stateful. It runs one
-  long-lived process:
+- `ClaudeHelperDaemon.qml` runs once and owns everything stateful. Each
+  session runs its own process:
 
   ```
   claude -p --input-format stream-json --output-format stream-json
   ```
 
   in `~/.cache/dms-claude-helper`. Each ask is one JSON line on its stdin.
-  The session id is kept in plugin state, so the conversation survives a DMS
-  restart.
+  Sessions (key, Claude session id, title, messages) are kept in plugin
+  state.
 - The session's permissions are narrow. Its tools are Read, Write and Bash;
   the working directory is the cache dir; edits are auto-accepted only
   there; MCP servers are off. The only allowed shell command is
   `Bash(dms ipc call claudeHelper:*)`. `--permission-prompts none` denies
   everything else instead of hanging on a prompt nobody can answer.
-- `prompt/system.md` is appended to Claude Code's system prompt. It covers
-  the IPC usage, the display constraints and the tutoring policy.
+- `prompt/system.md` is appended to Claude Code's system prompt, with
+  `{{KEY}}` replaced by the session's key. It covers the IPC usage, the
+  display constraints and the tutoring policy.
 - `tools/render-math.py` turns `$…$`, `$$…$$`, `\(…\)` and `\[…\]` into PNGs
   (`latex` → `dvisvgm --exact-bbox` → `magick`), in the theme's text colour,
   cached by content hash.
@@ -74,9 +82,9 @@ dms ipc call claudeHelper status 'a few words'
     as source text.
   - Without `cmark-gfm` it falls back to Markdown images, which are blurry on
     a scaled output.
-- `ConversationView.qml` is the conversation plus the ask row, shared by the
-  bar popout (`ClaudeHelperWidget.qml`) and the reply window
-  (`ReplyWindow.qml`).
+- `ConversationView.qml` is the popout's body: session bar, session list or
+  conversation, and the ask row. `ClaudeHelperWidget.qml` is the bar icon
+  that hosts it.
 
 ## Requirements
 
@@ -110,12 +118,7 @@ programs.dank-material-shell.plugins.claudeHelper = {
 };
 ```
 
-Then add the widget in Settings → DankBar Layout. To make the reply window
-float on Hyprland (Lua config), match its title:
-
-```lua
-hl.window_rule({ match = { title = "^(Claude Helper)$" }, float = true })
-```
+Then add the widget in Settings → DankBar Layout.
 
 ### Iterating on it
 
