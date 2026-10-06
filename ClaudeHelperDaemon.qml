@@ -571,6 +571,7 @@ PluginComponent {
             if (s && ev.session_id && ev.session_id !== s.claudeId)
                 _update(key, c => c.claudeId = ev.session_id);
         } else if (ev.type === "assistant") {
+            p.answered = true;
             _setRuntime(key, {
                 busy: true // a queued message may have started a new turn
             });
@@ -589,12 +590,29 @@ PluginComponent {
                 busy: false,
                 status: ""
             });
-            p.inFlight = p.inFlight.slice(1);
             if (!session(key))
                 return;
-            if (ev.is_error)
-                _showError(key, "Claude: " + (ev.result || ev.subtype || "error"));
-            else if (!p.repliedThisTurn && ev.result && ev.result.trim())
+            const errors = (ev.errors || []).join("; ");
+            // Only a session Claude Code has no record of may be replaced by a
+            // fresh one. Anything else -- e.g. "running as a background
+            // session" -- must keep the id: replacing it silently loses the
+            // conversation the user came for.
+            if (ev.is_error && /No conversation found/i.test(errors) && !p.resumeRetried) {
+                const lines = p.inFlight;
+                _stopProc(key);
+                _update(key, c => c.claudeId = "");
+                _startProc(key, lines);
+                _procs[key].resumeRetried = true;
+                return;
+            }
+            p.inFlight = p.inFlight.slice(1);
+            if (ev.is_error) {
+                _showError(key, "Claude: " + (errors || p.lastStderr || ev.result || ev.subtype || "error"));
+                // Failed before ever answering (a refused --resume): drop the
+                // process so the next ask tries the resume again.
+                if (!p.answered)
+                    _stopProc(key);
+            } else if (!p.repliedThisTurn && ev.result && ev.result.trim())
                 _showReply(key, ev.result.trim(), true);
             p.repliedThisTurn = false;
             p.statusFromClaude = false;
@@ -612,13 +630,6 @@ PluginComponent {
         _procs = next;
         Qt.callLater(() => p.destroy());
         const s = session(key);
-        // A stale --resume id makes claude exit before init: start fresh once.
-        if (s && !p.sawInit && s.claudeId && !p.resumeRetried && p.inFlight.length) {
-            _update(key, c => c.claudeId = "");
-            _startProc(key, p.inFlight);
-            _procs[key].resumeRetried = true;
-            return;
-        }
         if (_isBusy(key)) {
             _setRuntime(key, {
                 busy: false,
@@ -639,6 +650,7 @@ PluginComponent {
             property bool started: false
             property bool sawInit: false
             property bool resumeRetried: false
+            property bool answered: false // produced any assistant output
             property bool repliedThisTurn: false
             property bool statusFromClaude: false // its own words beat our tool guesses
             property var pending: []   // written once the process has started
