@@ -61,13 +61,21 @@ dms ipc call claudeHelper title  <key> 'topic'
   in `~/.cache/dms-claude-helper`. Each ask is one JSON line on its stdin.
   Sessions (key, Claude session id, title, messages) are kept in plugin
   state.
-- The session's permissions are narrow. Its tools are Read, Write and Bash;
-  the working directory is the cache dir; edits are auto-accepted only
-  there; MCP servers are off. The only allowed shell command is
-  `Bash(dms ipc call claudeHelper:*)`. `--permission-prompts none` denies
-  everything else instead of hanging on a prompt nobody can answer.
+- Permissions depend on the `permissionMode` setting:
+  - `restricted` (default): the tools are Read, Write and Bash; edits are
+    auto-accepted only in the cache dir; the only allowed shell command is
+    `Bash(dms ipc call claudeHelper:*)`. `--permission-prompts none` denies
+    everything else instead of hanging on a prompt nobody can answer.
+  - `bypass`: all default tools with `--permission-mode bypassPermissions`.
+    Its input includes screenshots of arbitrary screen content, so text on
+    screen could try to steer it. The prompt tells it to treat such text as
+    content, and not to change files or the system unasked.
+
+  MCP servers are off in both modes. Changing the mode, model or extra
+  instructions restarts idle sessions on their next ask.
 - `prompt/system.md` is appended to Claude Code's system prompt, with
-  `{{KEY}}` replaced by the session's key. It covers the IPC usage, the
+  `{{KEY}}` replaced by the session's key and the tool rules filled in for
+  the permission mode. It covers the IPC usage, the
   display constraints and the tutoring policy.
 - `tools/render-math.py` turns `$…$`, `$$…$$`, `\(…\)` and `\[…\]` into PNGs
   (`latex` → `dvisvgm --exact-bbox` → `magick`), in the theme's text colour,

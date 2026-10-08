@@ -39,6 +39,23 @@ PluginSettings {
     }
 
     SelectionSetting {
+        settingKey: "permissionMode"
+        label: "Permissions"
+        description: "Restricted: Claude can read the screenshot, write its reply and call the plugin, nothing else. Bypass: every tool and command runs without asking. Its input includes screenshots of whatever is on screen, so text there could try to steer it."
+        options: [
+            {
+                label: "Restricted",
+                value: "restricted"
+            },
+            {
+                label: "Bypass permissions",
+                value: "bypass"
+            }
+        ]
+        defaultValue: "restricted"
+    }
+
+    SelectionSetting {
         settingKey: "captureScope"
         label: "Capture"
         description: "Which part of the desktop the screenshot covers."
