@@ -33,7 +33,7 @@ PluginSettings {
     StringSetting {
         settingKey: "model"
         label: "Model"
-        description: "Passed to claude --model (e.g. sonnet, opus, haiku). Empty uses Claude Code's default."
+        description: "Default model for sessions (claude --model: fable, opus, sonnet, haiku). Empty uses Claude Code's default. Each session can pick its own with the model chip in the popout."
         placeholder: "sonnet"
         defaultValue: ""
     }

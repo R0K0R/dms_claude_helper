@@ -15,8 +15,16 @@ Item {
     property var widget: null // passed to the daemon as "who asked"
     property real logHeight: 380
     property bool listing: false // the session list replaces the log
+    property bool pickingModel: false // the model row shows under the session bar
 
-    implicitHeight: sessionBar.height + Theme.spacingS + logHeight + Theme.spacingS + askRow.height
+    readonly property string currentModel: daemon && daemon.current ? daemon.modelOf(daemon.currentKey) : ""
+    readonly property Item contentTop: modelRow.visible ? modelRow : sessionBar
+
+    implicitHeight: sessionBar.height + (modelRow.visible ? modelRow.height + Theme.spacingS : 0) + Theme.spacingS + logHeight + Theme.spacingS + askRow.height
+
+    function modelLabel(m) {
+        return m ? m.charAt(0).toUpperCase() + m.slice(1) : "Default";
+    }
 
     function focusNote() {
         note.forceActiveFocus();
@@ -45,7 +53,7 @@ Item {
         MouseArea {
             id: barArea
             anchors.fill: parent
-            anchors.rightMargin: newButton.width + Theme.spacingS
+            anchors.rightMargin: newButton.width + modelChip.width + Theme.spacingS * 2
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: view.listing = !view.listing
@@ -54,7 +62,7 @@ Item {
         Row {
             anchors.left: parent.left
             anchors.leftMargin: Theme.spacingM
-            anchors.right: newButton.left
+            anchors.right: modelChip.left
             anchors.rightMargin: Theme.spacingS
             anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.spacingS
@@ -87,6 +95,36 @@ Item {
             }
         }
 
+        // Current session's model; opens the model row.
+        Rectangle {
+            id: modelChip
+            visible: !!view.daemon && !!view.daemon.current
+            anchors.right: newButton.left
+            anchors.rightMargin: Theme.spacingXS
+            anchors.verticalCenter: parent.verticalCenter
+            width: visible ? chipText.implicitWidth + Theme.spacingM * 2 : 0
+            height: 26
+            radius: 13
+            color: view.pickingModel ? Theme.withAlpha(Theme.primary, 0.25) : chipArea.containsMouse ? Theme.surfaceContainerHighest : Theme.withAlpha(Theme.primary, 0.12)
+
+            StyledText {
+                id: chipText
+                anchors.centerIn: parent
+                text: view.modelLabel(view.currentModel)
+                font.pixelSize: Theme.fontSizeSmall
+                font.weight: Font.Medium
+                color: Theme.primary
+            }
+
+            MouseArea {
+                id: chipArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: view.pickingModel = !view.pickingModel
+            }
+        }
+
         DankActionButton {
             id: newButton
             anchors.right: parent.right
@@ -103,12 +141,60 @@ Item {
         }
     }
 
+    // ---- model row ----------------------------------------------------------
+
+    Flow {
+        id: modelRow
+        visible: view.pickingModel && !!view.daemon && !!view.daemon.current
+        anchors.top: sessionBar.bottom
+        anchors.topMargin: Theme.spacingS
+        width: parent.width
+        spacing: Theme.spacingXS
+
+        Repeater {
+            model: view.daemon ? view.daemon.models : []
+
+            delegate: Rectangle {
+                id: opt
+
+                required property string modelData
+                readonly property bool chosen: !!view.daemon && !!view.daemon.current && (view.daemon.current.model || "") === modelData
+
+                width: optText.implicitWidth + Theme.spacingM * 2
+                height: 30
+                radius: 15
+                color: chosen ? Theme.primary : optArea.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+
+                StyledText {
+                    id: optText
+                    anchors.centerIn: parent
+                    // "Default" names what it resolves to, when the setting says.
+                    text: opt.modelData ? view.modelLabel(opt.modelData) : "Default" + (view.daemon && view.daemon.model ? " (" + view.daemon.model + ")" : "")
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.weight: Font.Medium
+                    color: opt.chosen ? Theme.surface : Theme.surfaceText
+                }
+
+                MouseArea {
+                    id: optArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        view.daemon.setSessionModel(view.daemon.currentKey, opt.modelData);
+                        view.pickingModel = false;
+                    }
+                }
+            }
+        }
+    }
+
     // ---- session list -----------------------------------------------------
 
     DankFlickable {
         id: sessionList
         visible: view.listing
-        anchors.top: sessionBar.bottom
+        anchors.top: view.contentTop.bottom
         anchors.topMargin: Theme.spacingS
         width: parent.width
         height: Math.max(0, view.logHeight)
@@ -210,7 +296,7 @@ Item {
     DankFlickable {
         id: log
         visible: !view.listing
-        anchors.top: sessionBar.bottom
+        anchors.top: view.contentTop.bottom
         anchors.topMargin: Theme.spacingS
         width: parent.width
         height: Math.max(0, view.logHeight)

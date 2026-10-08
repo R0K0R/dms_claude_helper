@@ -73,10 +73,14 @@ PluginComponent {
 
     readonly property string workDir: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/dms-claude-helper"
 
+    // `claude --model` aliases offered in the popout; "" = the `model`
+    // setting, or Claude Code's own default when that is empty too.
+    readonly property var models: ["", "fable", "opus", "sonnet", "haiku"]
+
     readonly property int maxSessions: 30
     readonly property int maxMessages: 60
 
-    // Persisted. [{key, claudeId, title, titled, created, updated, unread,
+    // Persisted. [{key, claudeId, title, titled, model?, created, updated, unread,
     //              messages: [{id, role: "user"|"claude"|"error", text, shot?,
     //                          fallback?, rendered?, renderedFormat?, time}]}]
     property var sessions: []
@@ -256,6 +260,30 @@ PluginComponent {
         return true;
     }
 
+    // The model a session runs: its own pick, else the setting, else "" (CLI
+    // default).
+    function modelOf(key) {
+        const s = session(key);
+        return (s && s.model) || model;
+    }
+
+    // Takes effect on the session's next process start: an idle process is
+    // dropped now, a busy one after its turn. The conversation carries over
+    // (--resume with a different --model).
+    function setSessionModel(key, m) {
+        if (!session(key) || models.indexOf(m) < 0)
+            return false;
+        _update(key, s => s.model = m);
+        const p = _procs[key];
+        if (p) {
+            if (_isBusy(key))
+                p.restartAfterTurn = true;
+            else
+                _stopProc(key);
+        }
+        return true;
+    }
+
     function clearMessages() {
         if (current)
             _update(currentKey, s => s.messages = []);
@@ -289,6 +317,14 @@ PluginComponent {
 
     function _showReply(key, text, fallback) {
         const p = _procs[key];
+        // Weaker models sometimes re-send a reply they already sent ("did that
+        // work?"); the same text twice in one turn is shown once.
+        if (p && p.repliedThisTurn) {
+            const msgs = session(key).messages;
+            const last = msgs[msgs.length - 1];
+            if (last && last.role === "claude" && last.text === text)
+                return;
+        }
         if (p)
             p.repliedThisTurn = true;
         _setRuntime(key, {
@@ -505,8 +541,9 @@ PluginComponent {
             // with on every resume, so prompt changes (and the session key)
             // would never reach an existing session.
             "--system-prompt-snapshot", "off"]);
-        if (model)
-            cmd.push("--model", model);
+        const m = modelOf(key);
+        if (m)
+            cmd.push("--model", m);
         const s = session(key);
         if (s && s.claudeId)
             cmd.push("--resume", s.claudeId);
@@ -647,7 +684,9 @@ PluginComponent {
                 _showReply(key, ev.result.trim(), true);
             p.repliedThisTurn = false;
             p.statusFromClaude = false;
-            if (key !== currentKey)
+            if (p.restartAfterTurn && !_isBusy(key))
+                _stopProc(key); // model changed mid-turn
+            else if (key !== currentKey)
                 _reap();
         }
     }
@@ -682,6 +721,7 @@ PluginComponent {
             property bool sawInit: false
             property bool resumeRetried: false
             property bool answered: false // produced any assistant output
+            property bool restartAfterTurn: false // its session's model changed
             property bool repliedThisTurn: false
             property bool statusFromClaude: false // its own words beat our tool guesses
             property var pending: []   // written once the process has started
@@ -806,6 +846,15 @@ PluginComponent {
             return root.newSession();
         }
 
+        // Model for the current session: "" (default), fable, opus, sonnet,
+        // haiku.
+        function model(name: string): string {
+            const m = name === "default" ? "" : name;
+            if (!root.current)
+                return "error: no session";
+            return root.setSessionModel(root.currentKey, m) ? "ok" : "error: one of default, " + root.models.slice(1).join(", ");
+        }
+
         function select(key: string): string {
             return root.selectSession(key) ? "ok" : root._unknown(key);
         }
@@ -849,6 +898,7 @@ PluginComponent {
                 capturing: root.capturing,
                 status: root.statusText,
                 claudeId: root.current ? root.current.claudeId : "",
+                model: root.modelOf(root.currentKey) || "(claude default)",
                 running: Object.keys(root._procs),
                 sessions: root.sessions.length,
                 messages: root.messages.length

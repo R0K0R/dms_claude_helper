@@ -21,6 +21,10 @@ give the final answer.
   the session list (switch, see which are busy or unread, delete); **+**
   starts a new one. Claude names each session after its topic on its first
   reply.
+- The **model chip** in that bar shows the session's model. Click it to pick
+  Fable, Opus, Sonnet or Haiku for this session, or Default (the `model`
+  setting, else Claude Code's default). The conversation carries over; an
+  idle session switches at once, and a busy one after its current turn.
 
 The icon spins while Claude works and shows a dot when a reply is unread.
 When a reply lands, the popout opens on it: on the bar you asked from, or
@@ -39,6 +43,7 @@ dms ipc call claudeHelper ask  'optional note'   # screenshot focused output + a
 dms ipc call claudeHelper say  'follow-up'       # ask without a screenshot
 dms ipc call claudeHelper sessions               # key, * for current, title
 dms ipc call claudeHelper newSession | select <key> | remove <key>
+dms ipc call claudeHelper model opus             # current session: default|fable|opus|sonnet|haiku
 dms ipc call claudeHelper show | hide            # the popout
 dms ipc call claudeHelper last                   # current session's last reply
 dms ipc call claudeHelper state
