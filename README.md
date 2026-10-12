@@ -78,6 +78,12 @@ dms ipc call claudeHelper title  <key> 'topic'
 
   MCP servers are off in both modes. Changing the mode, model or extra
   instructions restarts idle sessions on their next ask.
+- **Memory:** every session shares Claude Code's auto-memory folder for the
+  cache dir (`~/.claude/projects/-home-r0k0r--cache-dms-claude-helper/memory`
+  for this user). The prompt tells Claude what is worth keeping for a study
+  helper: courses and exam dates and scope, recurring mistakes, how you
+  want hints. A new session starts knowing those. Restricted mode reaches
+  the folder through `--add-dir`.
 - `prompt/system.md` is appended to Claude Code's system prompt, with
   `{{KEY}}` replaced by the session's key and the tool rules filled in for
   the permission mode. It covers the IPC usage, the
@@ -143,5 +149,6 @@ systemctl --user restart dms.service
 A DMS restart is required after every QML edit. `dms ipc call plugins
 reload` does not pick up changes, and it cannot see newly added QML files,
 because QML caches compiled components and directory types by URL.
-`tools/render-math.py` and `prompt/system.md` are re-read on use, and on the
-next session respectively, so they need no restart.
+`tools/render-math.py` and `prompt/system.md` need no restart: the script
+runs fresh for each reply, and the prompt is watched, so an edit reaches
+every session on its next ask.

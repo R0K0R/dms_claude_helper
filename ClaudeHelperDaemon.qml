@@ -72,6 +72,9 @@ PluginComponent {
     readonly property string cmarkCommand: pluginData.cmarkCommand || "cmark-gfm"
 
     readonly property string workDir: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/dms-claude-helper"
+    // Claude Code's auto-memory dir for that cwd (path with / and . as -),
+    // shared by every session. Restricted mode gets it via --add-dir.
+    readonly property string memoryDir: Quickshell.env("HOME") + "/.claude/projects/" + workDir.replace(/[\/.]/g, "-") + "/memory"
 
     // `claude --model` aliases offered in the popout; "" = the `model`
     // setting, or Claude Code's own default when that is empty too.
@@ -512,17 +515,24 @@ PluginComponent {
         return decodeURIComponent(Qt.resolvedUrl(rel).toString().replace(/^file:\/\//, "").replace(/\?.*$/, ""));
     }
 
+    // Read at each process start; watched so an edit reaches the next ask
+    // (idle processes are dropped) without restarting DMS.
     FileView {
         id: promptFile
         path: root._pluginFile("prompt/system.md")
         blockLoading: true
+        watchChanges: true
+        onFileChanged: {
+            reload();
+            root._restartIdle();
+        }
     }
 
     readonly property var _rules: ({
             restricted: {
                 shell: "It is the only shell command you are allowed to run. Any other command is denied automatically, so don't try `ls`, `cat`, `python` and so on.",
-                tool: "Don't explore the filesystem. Use no tools except Read (for the screenshot and files you wrote yourself), Write (for `reply-{{KEY}}.md`), and the `dms ipc call claudeHelper …` command.",
-                flags: ["--tools", "Read,Write,Bash", "--permission-mode", "acceptEdits", "--permission-prompts", "none", "--allowedTools", "Bash(dms ipc call claudeHelper:*)"]
+                tool: "Don't explore the filesystem. Use no tools except Read (for the screenshot and files you wrote yourself), Write and Edit (for `reply-{{KEY}}.md` and your memory files), and the `dms ipc call claudeHelper …` command.",
+                flags: ["--tools", "Read,Write,Edit,Bash", "--permission-mode", "acceptEdits", "--permission-prompts", "none", "--allowedTools", "Bash(dms ipc call claudeHelper:*)", "--add-dir", root.memoryDir]
             },
             bypass: {
                 shell: "This session runs with permission checks bypassed: every tool and shell command runs without asking. The user still only sees what you send through these calls.",
